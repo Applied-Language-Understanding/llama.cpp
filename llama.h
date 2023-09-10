@@ -173,27 +173,36 @@ extern "C" {
     // grammar element type
     enum llama_gretype {
         // end of rule definition
-        LLAMA_GRETYPE_END            = 0,
+        LLAMA_GRETYPE_END             = 0,
 
         // start of alternate definition for rule
-        LLAMA_GRETYPE_ALT            = 1,
+        LLAMA_GRETYPE_ALT             = 1,
 
         // non-terminal element: reference to rule
-        LLAMA_GRETYPE_RULE_REF       = 2,
+        LLAMA_GRETYPE_RULE_REF        = 2,
 
         // terminal element: character (code point)
-        LLAMA_GRETYPE_CHAR           = 3,
+        LLAMA_GRETYPE_CHAR            = 3,
 
         // inverse char(s) ([^a], [^a-b] [^abc])
-        LLAMA_GRETYPE_CHAR_NOT       = 4,
+        LLAMA_GRETYPE_CHAR_NOT        = 4,
 
         // modifies a preceding LLAMA_GRETYPE_CHAR or LLAMA_GRETYPE_CHAR_ALT to
         // be an inclusive range ([a-z])
-        LLAMA_GRETYPE_CHAR_RNG_UPPER = 5,
+        LLAMA_GRETYPE_CHAR_RNG_UPPER  = 5,
 
         // modifies a preceding LLAMA_GRETYPE_CHAR or
         // LLAMA_GRETYPE_CHAR_RNG_UPPER to add an alternate char to match ([ab], [a-zA])
-        LLAMA_GRETYPE_CHAR_ALT       = 6,
+        LLAMA_GRETYPE_CHAR_ALT        = 6,
+
+        // start of a sub-string match. partial string matching is requested by prepending
+        // a tilde to a string literal, like: ~"match any part of this string". it's followed
+        // by a sequence of LLAMA_GRETYPE_CHAR_SUB elements
+        LLAMA_GRETYPE_MATCH_SUBSTRING = 7,
+
+        // terminal element: character (code point) like LLAMA_GRETYPE_CHAR, but when the
+        // character is part of a substring-match literal
+        LLAMA_GRETYPE_CHAR_SUB        = 8,
     };
 
     typedef struct llama_grammar_element {

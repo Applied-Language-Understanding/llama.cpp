@@ -3551,11 +3551,23 @@ static bool llama_grammar_is_end_of_sequence(const llama_grammar_element * pos) 
     }
 }
 
+static bool llama_grammar_is_substring_terminator(const llama_grammar_element * pos) {
+    switch (pos->value) {
+        case '\n': return true;
+        case '\r': return true;
+        default:   return false;
+    }
+}
+
 // returns true iff chr satisfies the char range at pos (regular or inverse range)
 // asserts that pos is pointing to a char range element
 static std::pair<bool, const llama_grammar_element *> llama_grammar_match_char(
         const llama_grammar_element * pos,
         const uint32_t                chr) {
+
+    if (pos->type == LLAMA_GRETYPE_CHAR_SUB) {
+        return  std::make_pair(pos->value == chr && !llama_grammar_is_substring_terminator(pos), pos + 1);
+    }
 
     bool found            = false;
     bool is_positive_char = pos->type == LLAMA_GRETYPE_CHAR;
@@ -3584,7 +3596,7 @@ static bool llama_grammar_match_partial_char(
         const llama_grammar_element * pos,
         const llama_partial_utf8      partial_utf8) {
 
-    bool is_positive_char = pos->type == LLAMA_GRETYPE_CHAR;
+    bool is_positive_char = pos->type == LLAMA_GRETYPE_CHAR || pos->type == LLAMA_GRETYPE_CHAR_SUB;
     GGML_ASSERT(is_positive_char || pos->type == LLAMA_GRETYPE_CHAR_NOT);
 
     uint32_t partial_value = partial_utf8.value;
@@ -3674,6 +3686,36 @@ static void llama_grammar_advance_stack(
         case LLAMA_GRETYPE_CHAR_NOT:
             new_stacks.emplace_back(stack);
             break;
+        case LLAMA_GRETYPE_MATCH_SUBSTRING:
+            // the match may start at any character in the string, except on a delimiter
+            // this is not very efficient, but in the whole scheme of things...
+            for (auto pos_sub = pos + 1; pos_sub->type == LLAMA_GRETYPE_CHAR_SUB; ++pos_sub) {
+              if (!llama_grammar_is_substring_terminator(pos_sub)) {
+                std::vector<const llama_grammar_element *> sub_stack(stack.begin(), stack.end() - 1);
+                sub_stack.push_back(pos_sub);
+                new_stacks.emplace_back(sub_stack);
+              }
+            }
+            break;
+        case LLAMA_GRETYPE_CHAR_SUB: {
+            // we're in a substring match
+            if (!llama_grammar_is_substring_terminator(pos)) {
+              // the match can continue with the next character
+              new_stacks.emplace_back(stack);
+            }
+            const auto pos_before = pos - 1;
+            if (pos_before->type != LLAMA_GRETYPE_MATCH_SUBSTRING && !llama_grammar_is_substring_terminator(pos_before)) {
+              // the match can end at the current point
+              std::vector<const llama_grammar_element *> substring_end_stack(stack.begin(), stack.end() - 1);
+              auto pos_after = pos;
+              while ((++pos_after)->type == LLAMA_GRETYPE_CHAR_SUB);
+              if (!llama_grammar_is_end_of_sequence(pos_after)) {
+                substring_end_stack.push_back(pos_after);
+              }
+              new_stacks.emplace_back(substring_end_stack);
+            }
+            break;
+        }
         default:
             // end of alternate (LLAMA_GRETYPE_END, LLAMA_GRETYPE_ALT) or middle of char range
             // (LLAMA_GRETYPE_CHAR_ALT, LLAMA_GRETYPE_CHAR_RNG_UPPER); stack should never be left on
