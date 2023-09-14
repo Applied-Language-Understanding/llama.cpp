@@ -4218,7 +4218,11 @@ void llama_sample_grammar(struct llama_context * ctx, llama_token_data_array * c
         candidates->data[reject.index].logit = -INFINITY;
     }
 
-    ctx->t_sample_us += ggml_time_us() - t_start_sample_us;
+    const int64_t t_sample_us = ggml_time_us() - t_start_sample_us;
+    ctx->t_sample_us += t_sample_us;
+
+    LLAMA_LOG_INFO("%s: rejected %lu of %lu candidates (%.2f ms)\n",
+                   __func__, rejects.size(), candidates->size, t_sample_us / 1000.0);
 }
 
 static void llama_log_softmax(float * array, size_t size) {
