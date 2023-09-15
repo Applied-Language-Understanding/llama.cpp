@@ -3558,6 +3558,17 @@ static bool llama_grammar_is_substring_terminator(const llama_grammar_element * 
     }
 }
 
+static bool llama_grammar_is_substring_delimiter(const llama_grammar_element * pos) {
+    switch (pos->value) {
+        case ' ': return true;
+        case ',': return true;
+        case ';': return true;
+        case '\n': return true;
+        case '\r': return true;
+        default:   return false;
+    }
+}
+
 // returns true iff chr satisfies the char range at pos (regular or inverse range)
 // asserts that pos is pointing to a char range element
 static std::pair<bool, const llama_grammar_element *> llama_grammar_match_char(
@@ -3698,10 +3709,13 @@ static void llama_grammar_advance_stack(
             llama_grammar_add_stack_if_unique(new_stacks, stack);
             break;
         case LLAMA_GRETYPE_MATCH_SUBSTRING:
-            // the match may start at any character in the string, except on a delimiter
+            // the match may start at the beggining of any word in the string
             // this is not very efficient, but in the whole scheme of things...
             for (auto pos_sub = pos + 1; pos_sub->type == LLAMA_GRETYPE_CHAR_SUB; ++pos_sub) {
-              if (!llama_grammar_is_substring_terminator(pos_sub)) {
+              const auto pos_before = pos_sub - 1;
+              if (!llama_grammar_is_substring_terminator(pos_sub) && (
+                  llama_grammar_is_substring_delimiter(pos_before) || pos_before->type == LLAMA_GRETYPE_MATCH_SUBSTRING)
+                 ) {
                 std::vector<const llama_grammar_element *> sub_stack(stack.begin(), stack.end() - 1);
                 sub_stack.push_back(pos_sub);
                 llama_grammar_add_stack_if_unique(new_stacks, sub_stack);
@@ -3715,7 +3729,9 @@ static void llama_grammar_advance_stack(
               llama_grammar_add_stack_if_unique(new_stacks, stack);
             }
             const auto pos_before = pos - 1;
-            if (pos_before->type != LLAMA_GRETYPE_MATCH_SUBSTRING && !llama_grammar_is_substring_terminator(pos_before)) {
+            if (pos_before->type != LLAMA_GRETYPE_MATCH_SUBSTRING &&
+                llama_grammar_is_substring_delimiter(pos) &&
+                !llama_grammar_is_substring_terminator(pos_before)) {
               // the match can end at the current point
               std::vector<const llama_grammar_element *> substring_end_stack(stack.begin(), stack.end() - 1);
               auto pos_after = pos;
